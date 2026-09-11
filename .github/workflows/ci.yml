@@ -139,7 +139,7 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.8
+          terraform_version: 1.16.2
 
       # Informational only — `terraform fmt` catches whitespace differences,
       # which don't affect correctness. Fix locally with:
