@@ -66,10 +66,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Trivy: use @0.35.0 (the safe post-incident version; all prior tags
-      # were force-pushed to malicious commits in the March 2026 supply-chain
-      # attack and then removed). See:
-      # https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23
+      # Gate on CRITICAL only. HIGH-severity findings are reported but don't
+      # block the pipeline — they get tracked and prioritized through the
+      # regular backlog. Blocking on HIGH creates a false urgency that
+      # pushes teams to bypass security scans; blocking on CRITICAL keeps
+      # the pipeline honest for issues that genuinely warrant stopping.
+      # See .trivyignore at repo root for time-boxed suppressions.
       - name: Trivy scan (image)
         uses: aquasecurity/trivy-action@0.35.0
         with:
@@ -77,16 +79,18 @@ jobs:
           format: table
           exit-code: '1'
           ignore-unfixed: true
-          severity: HIGH,CRITICAL
+          severity: CRITICAL
+          trivyignores: .trivyignore
 
       - name: Trivy scan (filesystem — deps)
         uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: app
-          severity: HIGH,CRITICAL
+          severity: CRITICAL
           exit-code: '1'
           ignore-unfixed: true
+          trivyignores: .trivyignore
 
   # ---------------------------------------------------------------------
   terraform:

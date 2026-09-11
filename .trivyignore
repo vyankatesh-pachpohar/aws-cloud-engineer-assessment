@@ -1,0 +1,13 @@
+# .trivyignore — suppress specific CVEs by ID with an expiry.
+# Format:  CVE-YYYY-NNNNN exp:YYYY-MM-DD  # reason
+# The `exp:` metadata is a Trivy 0.46+ feature; older versions just ignore
+# the line up to the # and the suppression is permanent (avoid — always
+# put a review date).
+#
+# Add entries ONLY with:
+#   - a link to the upstream fix or tracking issue
+#   - an expiry date (max 90 days from today)
+#   - the owner's name
+#
+# Example (uncomment and edit if a legitimate suppression is needed):
+# CVE-2026-54283 exp:2026-11-30  # starlette form-limit DoS; tracked in FastAPI upgrade; owner: vyankatesh

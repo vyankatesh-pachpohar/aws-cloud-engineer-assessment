@@ -10,10 +10,6 @@ variable "private_subnet_ids" {
   type = list(string)
 }
 
-variable "allowed_source_sg_id" {
-  type = string
-}
-
 variable "engine_version" {
   type    = string
   default = "16.4"

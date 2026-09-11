@@ -9,13 +9,15 @@ locals {
   }
 }
 
+data "aws_caller_identity" "me" {}
+
 # ------------- VPC -------------
 module "vpc" {
   source             = "../../modules/vpc"
   name               = local.name
   cidr               = var.vpc_cidr
   az_count           = 2
-  nat_per_az         = false                    # cost: one NAT in dev
+  nat_per_az         = false           # cost: one NAT in dev
   enable_flow_logs   = true
   log_retention_days = 14
   tags               = local.common_tags
@@ -25,7 +27,7 @@ module "vpc" {
 module "ecr" {
   source       = "../../modules/ecr"
   name         = local.name
-  force_delete = true                            # dev only; false in prod
+  force_delete = true                   # dev only; false in prod
   tags         = local.common_tags
 }
 
@@ -37,12 +39,10 @@ module "secrets" {
 }
 
 # ------------- S3 bucket for ALB logs -------------
-data "aws_caller_identity" "me" {}
-
 module "logs_bucket" {
   source              = "../../modules/s3"
   bucket_name         = "${local.name}-logs-${data.aws_caller_identity.me.account_id}"
-  force_destroy       = true                     # dev only
+  force_destroy       = true            # dev only
   log_expiration_days = 30
   tags                = local.common_tags
 }
@@ -55,41 +55,60 @@ module "alb" {
   public_subnet_ids   = module.vpc.public_subnet_ids
   certificate_arn     = var.acm_certificate_arn
   access_logs_bucket  = module.logs_bucket.bucket_id
-  deletion_protection = false                    # dev
+  deletion_protection = false           # dev
   tags                = local.common_tags
+}
+
+# ------------- RDS PostgreSQL -------------
+# Note: RDS module no longer accepts allowed_source_sg_id — the ingress
+# rule that lets ECS tasks reach RDS on 5432 is created below as a
+# standalone resource. This breaks what would otherwise be a circular
+# dependency between the RDS and ECS modules (ecs needs rds.endpoint;
+# rds would need ecs.task_sg_id).
+module "rds" {
+  source                = "../../modules/rds"
+  name                  = local.name
+  vpc_id                = module.vpc.vpc_id
+  private_subnet_ids    = module.vpc.private_subnet_ids
+  instance_class        = "db.t3.micro"
+  allocated_storage     = 20
+  multi_az              = false         # cost: false in dev, true in prod
+  backup_retention_days = 1
+  deletion_protection   = false
+  master_password       = module.secrets.db_password
+  tags                  = local.common_tags
 }
 
 # ------------- ECS Fargate service -------------
 module "ecs" {
-  source                    = "../../modules/ecs"
-  name                      = local.name
-  region                    = var.region
-  vpc_id                    = module.vpc.vpc_id
-  private_subnet_ids        = module.vpc.private_subnet_ids
-  alb_sg_id                 = module.alb.alb_sg_id
-  target_group_arn          = module.alb.target_group_arn
-  alb_arn_suffix            = module.alb.alb_arn_suffix
-  target_group_arn_suffix   = module.alb.target_group_arn_suffix
+  source                  = "../../modules/ecs"
+  name                    = local.name
+  region                  = var.region
+  vpc_id                  = module.vpc.vpc_id
+  private_subnet_ids      = module.vpc.private_subnet_ids
+  alb_sg_id               = module.alb.alb_sg_id
+  target_group_arn        = module.alb.target_group_arn
+  alb_arn_suffix          = module.alb.alb_arn_suffix
+  target_group_arn_suffix = module.alb.target_group_arn_suffix
 
-  # First apply uses a public "hello world" image so ECS has something to
-  # pull before our ECR repo is populated. CI overrides this with our image
-  # URI (see .github/workflows/deploy.yml).
-  container_image           = var.container_image_tag == "bootstrap" ? "public.ecr.aws/docker/library/nginx:alpine" : "${module.ecr.repository_url}:${var.container_image_tag}"
+  # First apply uses a public bootstrap image so ECS has something to pull
+  # before our ECR repo is populated. CI overrides this with our image URI.
+  container_image = var.container_image_tag == "bootstrap" ? "public.ecr.aws/docker/library/nginx:alpine" : "${module.ecr.repository_url}:${var.container_image_tag}"
+  container_port  = var.container_image_tag == "bootstrap" ? 80 : 8000
 
-  container_port            = var.container_image_tag == "bootstrap" ? 80 : 8000
-  desired_count             = 2
-  min_capacity              = 2
-  max_capacity              = 6
-  task_cpu                  = 512
-  task_memory               = 1024
+  desired_count = 2
+  min_capacity  = 2
+  max_capacity  = 6
+  task_cpu      = 512
+  task_memory   = 1024
 
   environment = {
-    APP_ENV     = var.environment
-    LOG_LEVEL   = "INFO"
-    DB_HOST     = module.rds.endpoint
-    DB_PORT     = tostring(module.rds.port)
-    DB_NAME     = module.rds.db_name
-    DB_USER     = "orders"
+    APP_ENV   = var.environment
+    LOG_LEVEL = "INFO"
+    DB_HOST   = module.rds.endpoint
+    DB_PORT   = tostring(module.rds.port)
+    DB_NAME   = module.rds.db_name
+    DB_USER   = "orders"
   }
 
   secrets = {
@@ -98,31 +117,22 @@ module "ecs" {
   secret_arns = [module.secrets.db_secret_arn]
 
   log_retention_days = 30
-  enable_exec        = true                      # allows `aws ecs execute-command`
+  enable_exec        = true             # allows `aws ecs execute-command`
   tags               = local.common_tags
-
-  depends_on = [module.ecr, module.rds]
 }
 
-# ------------- RDS PostgreSQL -------------
-# We need the ECS task SG to open RDS ingress. Create a placeholder SG first
-# to break the cycle would be one way; instead we let ECS create the task SG
-# and reference its output here. That means: first apply creates VPC + ECS SG
-# (via the ECS module) THEN RDS uses it. Terraform figures out the order.
-module "rds" {
-  source                = "../../modules/rds"
-  name                  = local.name
-  vpc_id                = module.vpc.vpc_id
-  private_subnet_ids    = module.vpc.private_subnet_ids
-  allowed_source_sg_id  = module.ecs.task_sg_id
+# ------------- Cross-module SG ingress: ECS tasks → RDS ------------
+# Standalone rule kept at root to avoid the ecs↔rds module cycle. Depends
+# only on the two SG IDs; Terraform creates it after both modules' SGs exist.
+resource "aws_vpc_security_group_ingress_rule" "rds_from_ecs" {
+  security_group_id            = module.rds.sg_id
+  referenced_security_group_id = module.ecs.task_sg_id
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+  description                  = "Postgres from ECS tasks"
 
-  instance_class        = "db.t3.micro"
-  allocated_storage     = 20
-  multi_az              = false                  # cost: false in dev, true in prod
-  backup_retention_days = 1                      # dev
-  deletion_protection   = false                  # dev
-  master_password       = module.secrets.db_password
-  tags                  = local.common_tags
+  tags = merge(local.common_tags, { Name = "${local.name}-rds-from-ecs" })
 }
 
 # ------------- WAF -------------
@@ -144,8 +154,8 @@ module "github_oidc" {
   passable_role_arns         = [module.ecs.execution_role_arn, module.ecs.task_role_arn]
   tf_state_bucket            = var.tf_state_bucket
   tf_lock_table              = var.tf_lock_table
-  create_provider            = true              # first env creates it; others: false
-  attach_admin_for_terraform = true              # split into plan/apply roles in prod
+  create_provider            = true
+  attach_admin_for_terraform = true
   tags                       = local.common_tags
 }
 
@@ -161,5 +171,4 @@ module "monitoring" {
   ecs_service_name        = module.ecs.service_name
   rds_instance_id         = local.name
   tags                    = local.common_tags
-  depends_on              = [module.rds]
 }
