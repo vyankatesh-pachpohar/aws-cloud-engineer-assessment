@@ -10,7 +10,9 @@ resource "aws_wafv2_web_acl" "this" {
   description = "ALB WAF for ${var.name}"
   scope       = "REGIONAL"
 
-  default_action { allow {} }
+  default_action {
+    allow {}
+  }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
@@ -21,13 +23,18 @@ resource "aws_wafv2_web_acl" "this" {
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
     priority = 1
-    override_action { none {} }
+
+    override_action {
+      none {}
+    }
+
     statement {
       managed_rule_group_statement {
         vendor_name = "AWS"
         name        = "AWSManagedRulesCommonRuleSet"
       }
     }
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "CommonRuleSet"
@@ -38,13 +45,18 @@ resource "aws_wafv2_web_acl" "this" {
   rule {
     name     = "AWSManagedRulesKnownBadInputsRuleSet"
     priority = 2
-    override_action { none {} }
+
+    override_action {
+      none {}
+    }
+
     statement {
       managed_rule_group_statement {
         vendor_name = "AWS"
         name        = "AWSManagedRulesKnownBadInputsRuleSet"
       }
     }
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "KnownBadInputs"
@@ -55,13 +67,18 @@ resource "aws_wafv2_web_acl" "this" {
   rule {
     name     = "AWSManagedRulesSQLiRuleSet"
     priority = 3
-    override_action { none {} }
+
+    override_action {
+      none {}
+    }
+
     statement {
       managed_rule_group_statement {
         vendor_name = "AWS"
         name        = "AWSManagedRulesSQLiRuleSet"
       }
     }
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "SQLi"
@@ -72,13 +89,18 @@ resource "aws_wafv2_web_acl" "this" {
   rule {
     name     = "RateLimitPerIP"
     priority = 10
-    action { block {} }
+
+    action {
+      block {}
+    }
+
     statement {
       rate_based_statement {
         limit              = var.rate_limit
         aggregate_key_type = "IP"
       }
     }
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "RateLimit"

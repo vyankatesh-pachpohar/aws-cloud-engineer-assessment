@@ -47,7 +47,10 @@ resource "aws_cloudwatch_metric_alarm" "alb_unhealthy" {
   alarm_description   = "≥1 unhealthy target for 3 minutes"
   namespace           = "AWS/ApplicationELB"
   metric_name         = "UnHealthyHostCount"
-  dimensions          = { LoadBalancer = var.alb_arn_suffix, TargetGroup = var.target_group_arn_suffix }
+  dimensions = {
+    LoadBalancer = var.alb_arn_suffix
+    TargetGroup  = var.target_group_arn_suffix
+  }
   statistic           = "Maximum"
   period              = 60
   evaluation_periods  = 3
@@ -81,7 +84,10 @@ resource "aws_cloudwatch_metric_alarm" "ecs_cpu" {
   alarm_description   = "ECS service average CPU > 85% for 10 min"
   namespace           = "AWS/ECS"
   metric_name         = "CPUUtilization"
-  dimensions          = { ClusterName = var.ecs_cluster_name, ServiceName = var.ecs_service_name }
+  dimensions = {
+    ClusterName = var.ecs_cluster_name
+    ServiceName = var.ecs_service_name
+  }
   statistic           = "Average"
   period              = 60
   evaluation_periods  = 10
@@ -142,55 +148,73 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
 }
 
 # ---------- Dashboard ----------
+# Each widget object attribute goes on its own line (Terraform requires
+# newlines OR commas between attributes; multi-line is more readable).
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "${var.name}-dashboard"
   dashboard_body = jsonencode({
     widgets = [
       {
-        type = "metric"  x = 0  y = 0  width = 12  height = 6
+        type   = "metric"
+        x      = 0
+        y      = 0
+        width  = 12
+        height = 6
         properties = {
           title  = "ALB requests & 5xx"
           region = var.region
           metrics = [
-            ["AWS/ApplicationELB", "RequestCount",         "LoadBalancer", var.alb_arn_suffix, { stat = "Sum" }],
-            [".",                  "HTTPCode_ELB_5XX_Count", ".",         ".",                 { stat = "Sum" }],
-            [".",                  "HTTPCode_Target_5XX_Count", ".",      ".",                 { stat = "Sum" }],
+            ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", var.alb_arn_suffix, { stat = "Sum" }],
+            [".", "HTTPCode_ELB_5XX_Count", ".", ".", { stat = "Sum" }],
+            [".", "HTTPCode_Target_5XX_Count", ".", ".", { stat = "Sum" }],
           ]
           view = "timeSeries"
         }
       },
       {
-        type = "metric"  x = 12  y = 0  width = 12  height = 6
+        type   = "metric"
+        x      = 12
+        y      = 0
+        width  = 12
+        height = 6
         properties = {
           title  = "Latency (target)"
           region = var.region
           metrics = [
             ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", var.alb_arn_suffix, { stat = "p50" }],
-            ["...",                                                                          { stat = "p95" }],
-            ["...",                                                                          { stat = "p99" }],
+            ["...", { stat = "p95" }],
+            ["...", { stat = "p99" }],
           ]
           view = "timeSeries"
         }
       },
       {
-        type = "metric"  x = 0  y = 6  width = 12  height = 6
+        type   = "metric"
+        x      = 0
+        y      = 6
+        width  = 12
+        height = 6
         properties = {
           title  = "ECS CPU & Memory"
           region = var.region
           metrics = [
-            ["AWS/ECS", "CPUUtilization",    "ClusterName", var.ecs_cluster_name, "ServiceName", var.ecs_service_name],
-            [".",       "MemoryUtilization", ".",           ".",                  ".",           "."],
+            ["AWS/ECS", "CPUUtilization", "ClusterName", var.ecs_cluster_name, "ServiceName", var.ecs_service_name],
+            [".", "MemoryUtilization", ".", ".", ".", "."],
           ]
         }
       },
       {
-        type = "metric"  x = 12  y = 6  width = 12  height = 6
+        type   = "metric"
+        x      = 12
+        y      = 6
+        width  = 12
+        height = 6
         properties = {
           title  = "RDS connections & CPU"
           region = var.region
           metrics = [
             ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", var.rds_instance_id],
-            [".",       "CPUUtilization",      ".",                    "."],
+            [".", "CPUUtilization", ".", "."],
           ]
         }
       },
