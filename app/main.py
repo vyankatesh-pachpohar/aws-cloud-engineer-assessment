@@ -5,6 +5,7 @@ Endpoints:
   GET  /orders/{id}   fetch an order
   GET  /health        liveness + DB readiness (ALB / ECS health-check target)
 """
+
 import logging
 import uuid
 from contextlib import asynccontextmanager
@@ -166,8 +167,8 @@ def create_order(
 def get_order(order_id: str, db: Session = Depends(get_db)):
     try:
         uuid.UUID(order_id)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="order_id must be a UUID")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail="order_id must be a UUID") from e
     order = db.get(Order, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="order not found")

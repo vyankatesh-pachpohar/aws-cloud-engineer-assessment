@@ -1,0 +1,26 @@
+# Minimal config for developer tooling. Runtime deps stay in app/requirements.txt.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["app/tests/__init__.py"]
+
+[tool.ruff.lint]
+# Standard sensible set:
+#   E, W = pycodestyle
+#   F    = pyflakes
+#   I    = isort (import ordering)
+#   B    = flake8-bugbear (likely bugs)
+#   UP   = pyupgrade (modern Python idioms)
+#   SIM  = flake8-simplify (obvious simplifications)
+select = ["E", "W", "F", "I", "B", "UP", "SIM"]
+ignore = [
+  "E501",   # long lines: formatter handles wrapping; occasional URLs are fine
+  "B008",   # FastAPI dependency-injection idiom uses function calls in defaults
+]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.bandit]
+exclude_dirs = ["app/tests"]

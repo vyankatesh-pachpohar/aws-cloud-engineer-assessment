@@ -17,9 +17,42 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------
+  lint:
+    name: Lint + security static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Ruff — Python linter + formatter check. Extremely fast, covers
+      # pycodestyle, pyflakes, isort, bugbear, and many more. Fails the
+      # step on any lint error; adjust config in pyproject.toml if you
+      # want a subset.
+      - name: Ruff (lint)
+        run: |
+          pip install ruff==0.7.4
+          ruff check app/
+          ruff format --check app/
+
+      # Bandit — Python security linter. Looks for common vuln patterns:
+      # eval(), assert-in-production, weak crypto, hardcoded secrets, SQL
+      # concat, subprocess=shell=True, etc. Fail-soft (issues reported but
+      # don't gate) so a false positive doesn't block a deploy — we track
+      # findings and fix, we don't stampede.
+      - name: Bandit (security)
+        continue-on-error: true
+        run: |
+          pip install bandit==1.7.10
+          bandit -r app/ -x app/tests --severity-level medium --confidence-level medium
+
+  # ---------------------------------------------------------------------
   test:
     name: Application tests
     runs-on: ubuntu-latest
+    needs: lint
     steps:
       - uses: actions/checkout@v4
 

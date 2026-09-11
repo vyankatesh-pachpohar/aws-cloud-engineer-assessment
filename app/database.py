@@ -5,6 +5,7 @@ Key design points:
   reconnects transparently instead of raising on first use.
 - Bounded pool (see config.py): total connections to RDS are predictable.
 """
+
 from collections.abc import Generator
 
 from sqlalchemy import create_engine

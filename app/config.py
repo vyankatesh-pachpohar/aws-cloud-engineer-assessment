@@ -5,6 +5,7 @@ so the same image runs locally (docker compose), in CI, and on ECS Fargate.
 On AWS the DB password is injected by ECS from AWS Secrets Manager into the
 DB_PASSWORD env var — the app never talks to Secrets Manager directly.
 """
+
 from functools import lru_cache
 
 from pydantic import Field
@@ -29,8 +30,8 @@ class Settings(BaseSettings):
     # execution) is being replaced by long-lived containers.
     db_pool_size: int = 5
     db_max_overflow: int = 5
-    db_pool_timeout: int = 5       # seconds a request will wait for a free conn
-    db_connect_timeout: int = 3    # TCP-level connect timeout
+    db_pool_timeout: int = 5  # seconds a request will wait for a free conn
+    db_connect_timeout: int = 3  # TCP-level connect timeout
 
     @property
     def database_url(self) -> str:

@@ -5,6 +5,7 @@ JSON lines parse cleanly in CloudWatch Logs Insights, e.g.:
   | filter level = "ERROR"
   | sort @timestamp desc
 """
+
 import logging
 import sys
 

@@ -33,3 +33,6 @@ crash.log
 *.pfx
 credentials
 aws-credentials
+-e 
+# Ruff cache
+.ruff_cache/

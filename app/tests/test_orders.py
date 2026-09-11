@@ -33,7 +33,10 @@ def test_validation_errors(client):
     assert client.post("/orders", json={**VALID, "items": []}).status_code == 422
     neg = client.post(
         "/orders",
-        json={"customer_email": "a@b.com", "items": [{"sku": "A", "quantity": 0, "unit_price": "1"}]},
+        json={
+            "customer_email": "a@b.com",
+            "items": [{"sku": "A", "quantity": 0, "unit_price": "1"}],
+        },
     )
     assert neg.status_code == 422
     dup_sku = client.post(
@@ -59,12 +62,13 @@ def test_idempotency_key_prevents_duplicates(client):
     first = client.post("/orders", json=VALID, headers={"Idempotency-Key": key})
     second = client.post("/orders", json=VALID, headers={"Idempotency-Key": key})
     assert first.status_code == 201
-    assert second.status_code == 200      # replay, not a new order
+    assert second.status_code == 200  # replay, not a new order
     assert first.json()["id"] == second.json()["id"]
 
 
 def test_db_failure_returns_503(client, monkeypatch):
     from sqlalchemy.exc import OperationalError
+
     from app import main
 
     def boom(*a, **k):

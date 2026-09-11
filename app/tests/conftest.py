@@ -3,6 +3,7 @@
 Tests run against an in-memory SQLite DB so CI needs no Postgres service.
 The app code is DB-agnostic through SQLAlchemy so behaviour is identical.
 """
+
 import os
 
 # Set before app.config is imported.
