@@ -1,0 +1,141 @@
+# .github/workflows/deploy.yml
+# On push to main:
+#   1. Build the container image
+#   2. Push it to ECR with the commit SHA as tag
+#   3. Terraform apply with that image tag
+#   4. Wait for ECS to stabilize the new deployment
+#   5. Smoke-test the ALB URL
+#
+# Rollback: if apply or smoke test fails, ECS's deployment circuit breaker
+# (configured in the module) rolls back to the previous task definition.
+# For a manual rollback, re-run this workflow against the last-good commit.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Override image tag (default = commit SHA)'
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false        # never cancel a running deploy
+
+jobs:
+  deploy:
+    name: Build, push, apply, smoke-test
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      AWS_REGION:     ${{ vars.AWS_REGION }}
+      IMAGE_TAG:      ${{ github.event.inputs.image_tag || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push image
+        id: build
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO:     ${{ vars.ECR_REPO_NAME }}
+        run: |
+          set -euo pipefail
+          IMAGE="$REGISTRY/$REPO:$IMAGE_TAG"
+          docker buildx build \
+            -f docker/Dockerfile \
+            -t "$IMAGE" \
+            -t "$REGISTRY/$REPO:latest" \
+            --push .
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: terraform init
+        working-directory: terraform/environments/dev
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=dev/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+
+      - name: terraform apply
+        working-directory: terraform/environments/dev
+        run: |
+          terraform apply -auto-approve -input=false \
+            -var="container_image_tag=$IMAGE_TAG" \
+            -var="github_org=${{ github.repository_owner }}" \
+            -var="github_repo=${{ github.event.repository.name }}" \
+            -var="tf_state_bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -var="tf_lock_table=${{ vars.TF_LOCK_TABLE }}" \
+            -var='alert_emails=${{ vars.ALERT_EMAILS_JSON }}'
+
+      # Terraform's `ignore_changes = [task_definition]` on the ECS service
+      # means we need to register a new task def revision and update the
+      # service ourselves. This is the standard, safe pattern.
+      - name: Register new ECS task definition + update service
+        working-directory: terraform/environments/dev
+        run: |
+          set -euo pipefail
+          CLUSTER=$(terraform output -raw ecs_cluster)
+          SERVICE=$(terraform output -raw ecs_service)
+          IMAGE="${{ steps.build.outputs.image }}"
+
+          TASK_DEF_ARN=$(aws ecs describe-services \
+            --cluster "$CLUSTER" --services "$SERVICE" \
+            --query 'services[0].taskDefinition' --output text)
+
+          aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" \
+            --query 'taskDefinition' > td.json
+
+          # Swap in new image, strip fields AWS rejects on register.
+          jq --arg IMG "$IMAGE" '
+            .containerDefinitions[0].image = $IMG
+            | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,
+                  .compatibilities,.registeredAt,.registeredBy)
+          ' td.json > td-new.json
+
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://td-new.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
+            --task-definition "$NEW_ARN" --force-new-deployment >/dev/null
+
+          echo "Waiting for service to stabilize..."
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+
+      - name: Smoke test
+        working-directory: terraform/environments/dev
+        run: |
+          set -euo pipefail
+          URL="http://$(terraform output -raw alb_dns_name)"
+          echo "Testing $URL/health"
+          for i in {1..20}; do
+            code=$(curl -s -o /tmp/body -w '%{http_code}' "$URL/health" || echo "000")
+            [[ "$code" == "200" ]] && cat /tmp/body && exit 0
+            echo "attempt $i: HTTP $code"
+            sleep 6
+          done
+          echo "Smoke test FAILED — ECS should auto-rollback via circuit breaker."
+          exit 1

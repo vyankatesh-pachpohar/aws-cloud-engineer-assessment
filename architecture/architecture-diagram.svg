@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 780" font-family="Arial, sans-serif" font-size="12">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#37474f"/>
+    </marker>
+    <style>
+      .aws-orange{fill:#ec7211;stroke:#c05a06;}
+      .aws-blue{fill:#1a73e8;stroke:#0b5cbe;}
+      .aws-green{fill:#3fb950;stroke:#238636;}
+      .aws-purple{fill:#7c3aed;stroke:#5b21b6;}
+      .aws-red{fill:#e5484d;stroke:#b32e34;}
+      .aws-teal{fill:#00b0b9;stroke:#008790;}
+      .box-label{fill:#fff;font-weight:bold;font-size:12px;text-anchor:middle;}
+      .sub-label{fill:#fff;font-size:10px;text-anchor:middle;}
+      .zone{fill:none;stroke-dasharray:6 4;stroke-width:1.5;}
+      .vpc{stroke:#7c3aed;}
+      .public{stroke:#3fb950;}
+      .private{stroke:#1a73e8;}
+      .zone-lbl{font-weight:bold;font-size:11px;}
+      .flow{stroke:#37474f;stroke-width:1.6;fill:none;marker-end:url(#arrow);}
+      .flow-dashed{stroke:#78909c;stroke-width:1.4;fill:none;stroke-dasharray:5 3;marker-end:url(#arrow);}
+      .title{font-size:20px;font-weight:bold;fill:#212121;}
+      .caption{font-size:11px;fill:#455a64;text-anchor:middle;}
+    </style>
+  </defs>
+
+  <text x="600" y="30" text-anchor="middle" class="title">Order API — AWS Target Architecture</text>
+  <text x="600" y="50" text-anchor="middle" fill="#546e7a" font-size="12">ECS Fargate behind ALB, RDS PostgreSQL, private subnets, IaC via Terraform, CI/CD via GitHub Actions OIDC</text>
+
+  <!-- Users -->
+  <circle cx="80" cy="140" r="22" class="aws-teal"/>
+  <text x="80" y="145" class="box-label">Users</text>
+
+  <!-- Route53 -->
+  <rect x="145" y="115" width="110" height="50" rx="6" class="aws-purple"/>
+  <text x="200" y="138" class="box-label">Route 53</text>
+  <text x="200" y="153" class="sub-label">DNS (optional)</text>
+
+  <!-- WAF -->
+  <rect x="285" y="115" width="110" height="50" rx="6" class="aws-red"/>
+  <text x="340" y="138" class="box-label">AWS WAFv2</text>
+  <text x="340" y="153" class="sub-label">managed + rate limit</text>
+
+  <!-- Flow users -->
+  <line x1="102" y1="140" x2="143" y2="140" class="flow"/>
+  <line x1="255" y1="140" x2="283" y2="140" class="flow"/>
+
+  <!-- VPC big box -->
+  <rect x="70" y="200" width="1060" height="500" class="zone vpc" rx="8"/>
+  <text x="90" y="222" class="zone-lbl" fill="#7c3aed">VPC 10.20.0.0/16 (ap-south-1)</text>
+
+  <!-- AZ-a public subnet -->
+  <rect x="100" y="240" width="480" height="120" class="zone public" rx="6"/>
+  <text x="115" y="258" class="zone-lbl" fill="#238636">Public subnet — AZ a</text>
+  <!-- AZ-b public subnet -->
+  <rect x="620" y="240" width="480" height="120" class="zone public" rx="6"/>
+  <text x="635" y="258" class="zone-lbl" fill="#238636">Public subnet — AZ b</text>
+
+  <!-- ALB spans public subnets -->
+  <rect x="465" y="275" width="270" height="60" rx="8" class="aws-orange"/>
+  <text x="600" y="298" class="box-label">Application Load Balancer</text>
+  <text x="600" y="315" class="sub-label">HTTPS 443 → target group :8000</text>
+  <text x="600" y="329" class="sub-label">access logs → S3</text>
+
+  <!-- IGW -->
+  <rect x="140" y="285" width="80" height="40" rx="4" class="aws-green"/>
+  <text x="180" y="302" class="box-label">IGW</text>
+  <text x="180" y="317" class="sub-label">internet</text>
+
+  <!-- NAT -->
+  <rect x="240" y="285" width="90" height="40" rx="4" class="aws-green"/>
+  <text x="285" y="302" class="box-label">NAT GW</text>
+  <text x="285" y="317" class="sub-label">egress only</text>
+
+  <!-- Flow WAF -> ALB -->
+  <line x1="340" y1="165" x2="340" y2="200" class="flow"/>
+  <line x1="340" y1="200" x2="600" y2="275" class="flow"/>
+
+  <!-- Private subnets -->
+  <rect x="100" y="380" width="480" height="240" class="zone private" rx="6"/>
+  <text x="115" y="398" class="zone-lbl" fill="#0b5cbe">Private subnet — AZ a</text>
+  <rect x="620" y="380" width="480" height="240" class="zone private" rx="6"/>
+  <text x="635" y="398" class="zone-lbl" fill="#0b5cbe">Private subnet — AZ b</text>
+
+  <!-- ECS task AZ-a -->
+  <rect x="150" y="420" width="200" height="70" rx="6" class="aws-blue"/>
+  <text x="250" y="443" class="box-label">ECS Fargate task</text>
+  <text x="250" y="460" class="sub-label">FastAPI · uvicorn</text>
+  <text x="250" y="475" class="sub-label">0.5 vCPU · 1 GB</text>
+
+  <!-- ECS task AZ-b -->
+  <rect x="720" y="420" width="200" height="70" rx="6" class="aws-blue"/>
+  <text x="820" y="443" class="box-label">ECS Fargate task</text>
+  <text x="820" y="460" class="sub-label">FastAPI · uvicorn</text>
+  <text x="820" y="475" class="sub-label">0.5 vCPU · 1 GB</text>
+
+  <!-- ALB -> tasks -->
+  <line x1="550" y1="335" x2="330" y2="420" class="flow"/>
+  <line x1="650" y1="335" x2="810" y2="420" class="flow"/>
+
+  <!-- ECS cluster label -->
+  <rect x="400" y="420" width="200" height="70" rx="6" fill="#eceff1" stroke="#78909c"/>
+  <text x="500" y="445" text-anchor="middle" font-weight="bold" fill="#37474f">ECS cluster</text>
+  <text x="500" y="462" text-anchor="middle" fill="#546e7a" font-size="10">Container Insights on</text>
+  <text x="500" y="477" text-anchor="middle" fill="#546e7a" font-size="10">Autoscale CPU 60% / 200 req/target</text>
+
+  <!-- RDS -->
+  <rect x="400" y="520" width="400" height="70" rx="6" class="aws-purple"/>
+  <text x="600" y="545" class="box-label">Amazon RDS PostgreSQL 16 (Multi-AZ in prod)</text>
+  <text x="600" y="562" class="sub-label">private · encrypted · TLS enforced · PIT recovery</text>
+  <text x="600" y="577" class="sub-label">SG: 5432 only from ECS tasks SG</text>
+
+  <!-- Task -> RDS -->
+  <line x1="250" y1="490" x2="470" y2="520" class="flow"/>
+  <line x1="820" y1="490" x2="730" y2="520" class="flow"/>
+
+  <!-- Right-side ops sidebar -->
+  <rect x="960" y="380" width="150" height="240" rx="8" fill="#eceff1" stroke="#78909c"/>
+  <text x="1035" y="402" text-anchor="middle" font-weight="bold" fill="#37474f">Ops plane</text>
+  <text x="1035" y="425" text-anchor="middle" font-size="10" fill="#546e7a">Secrets Manager</text>
+  <text x="1035" y="440" text-anchor="middle" font-size="9"  fill="#78909c">DB password → task</text>
+  <text x="1035" y="465" text-anchor="middle" font-size="10" fill="#546e7a">CloudWatch Logs</text>
+  <text x="1035" y="480" text-anchor="middle" font-size="9"  fill="#78909c">/aws/ecs/order-api</text>
+  <text x="1035" y="505" text-anchor="middle" font-size="10" fill="#546e7a">CloudWatch Alarms</text>
+  <text x="1035" y="520" text-anchor="middle" font-size="9"  fill="#78909c">ALB 5xx · lat · RDS</text>
+  <text x="1035" y="540" text-anchor="middle" font-size="9"  fill="#78909c">→ SNS email</text>
+  <text x="1035" y="565" text-anchor="middle" font-size="10" fill="#546e7a">VPC Flow Logs</text>
+  <text x="1035" y="580" text-anchor="middle" font-size="9"  fill="#78909c">REJECT → CW</text>
+  <text x="1035" y="600" text-anchor="middle" font-size="10" fill="#546e7a">S3 (ALB logs)</text>
+  <text x="1035" y="615" text-anchor="middle" font-size="9"  fill="#78909c">lifecycle → Glacier</text>
+
+  <!-- CI/CD strip at bottom -->
+  <rect x="70" y="720" width="1060" height="50" rx="8" fill="#fff3e0" stroke="#e07b00"/>
+  <text x="90" y="740" font-weight="bold" fill="#bf5f00">CI/CD (GitHub Actions, OIDC → AWS)</text>
+  <text x="90" y="758" font-size="11" fill="#455a64">
+    push → test · docker build · Trivy scan · terraform plan · ECR push · terraform apply · register new task def · ECS update-service · ALB smoke test  (rollback via ECS circuit breaker)
+  </text>
+</svg>

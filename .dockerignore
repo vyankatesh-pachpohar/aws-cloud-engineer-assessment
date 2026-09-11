@@ -1,0 +1,13 @@
+.git
+.github
+terraform
+architecture
+docs
+scripts
+*.md
+.env
+.env.*
+!.env.example
+**/__pycache__
+**/.pytest_cache
+app/tests

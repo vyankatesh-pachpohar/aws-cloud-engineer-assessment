@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+region              = "ap-south-1"
+alert_emails        = ["you@example.com"]
+github_org          = "your-github-username"
+github_repo         = "aws-cloud-engineer-assessment"
+tf_state_bucket     = "order-api-tfstate-123456789012"
+# acm_certificate_arn = "arn:aws:acm:ap-south-1:123456789012:certificate/xxx"  # optional

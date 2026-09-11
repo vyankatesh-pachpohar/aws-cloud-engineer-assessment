@@ -1,0 +1,4 @@
+# Thin wrapper so `docker compose up` works from the repo root.
+include:
+  - path: docker/docker-compose.yml
+    env_file: .env
