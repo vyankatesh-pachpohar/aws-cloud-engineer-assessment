@@ -1,14 +1,15 @@
 # .github/workflows/deploy.yml
 # On push to main:
-#   1. Build the container image
-#   2. Push it to ECR with the commit SHA as tag
-#   3. Terraform apply with that image tag
-#   4. Wait for ECS to stabilize the new deployment
-#   5. Smoke-test the ALB URL
+#   1. Skip everything if AWS_ROLE_ARN isn't set yet (first-time users push
+#      before configuring GitHub Actions variables — that's expected).
+#   2. Build the container image, push to ECR with commit SHA as tag.
+#   3. terraform apply with that image tag.
+#   4. Register a new ECS task definition + roll out.
+#   5. Wait for ECS to stabilize.
+#   6. Smoke-test /health on the ALB.
 #
-# Rollback: if apply or smoke test fails, ECS's deployment circuit breaker
-# (configured in the module) rolls back to the previous task definition.
-# For a manual rollback, re-run this workflow against the last-good commit.
+# Rollback: on failure, ECS's deployment circuit breaker (configured in the
+# module) reverts to the previous task definition automatically.
 
 name: Deploy
 
@@ -27,16 +28,37 @@ permissions:
 
 concurrency:
   group: deploy-dev
-  cancel-in-progress: false        # never cancel a running deploy
+  cancel-in-progress: false
 
 jobs:
+  # ------- pre-check: skip everything if GitHub Actions vars aren't set -------
+  precheck:
+    name: Check deploy prerequisites
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.check.outputs.ok }}
+    steps:
+      - id: check
+        run: |
+          if [ -z "${{ vars.AWS_ROLE_ARN }}" ]; then
+            echo "AWS_ROLE_ARN repository variable is not set."
+            echo "Skipping deploy — configure it once you've run the AWS bootstrap."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "AWS_ROLE_ARN is set — proceeding with deploy."
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ------- real deploy job -------
   deploy:
     name: Build, push, apply, smoke-test
     runs-on: ubuntu-latest
+    needs: precheck
+    if: needs.precheck.outputs.should_deploy == 'true'
     environment: dev
     env:
-      AWS_REGION:     ${{ vars.AWS_REGION }}
-      IMAGE_TAG:      ${{ github.event.inputs.image_tag || github.sha }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      IMAGE_TAG:  ${{ github.event.inputs.image_tag || github.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -63,7 +85,7 @@ jobs:
             -t "$IMAGE" \
             -t "$REGISTRY/$REPO:latest" \
             --push .
-          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -90,9 +112,6 @@ jobs:
             -var="tf_lock_table=${{ vars.TF_LOCK_TABLE }}" \
             -var='alert_emails=${{ vars.ALERT_EMAILS_JSON }}'
 
-      # Terraform's `ignore_changes = [task_definition]` on the ECS service
-      # means we need to register a new task def revision and update the
-      # service ourselves. This is the standard, safe pattern.
       - name: Register new ECS task definition + update service
         working-directory: terraform/environments/dev
         run: |
@@ -108,7 +127,6 @@ jobs:
           aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" \
             --query 'taskDefinition' > td.json
 
-          # Swap in new image, strip fields AWS rejects on register.
           jq --arg IMG "$IMAGE" '
             .containerDefinitions[0].image = $IMG
             | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,
@@ -131,11 +149,14 @@ jobs:
           set -euo pipefail
           URL="http://$(terraform output -raw alb_dns_name)"
           echo "Testing $URL/health"
-          for i in {1..20}; do
+          for i in $(seq 1 20); do
             code=$(curl -s -o /tmp/body -w '%{http_code}' "$URL/health" || echo "000")
-            [[ "$code" == "200" ]] && cat /tmp/body && exit 0
+            if [ "$code" = "200" ]; then
+              cat /tmp/body
+              exit 0
+            fi
             echo "attempt $i: HTTP $code"
             sleep 6
           done
-          echo "Smoke test FAILED — ECS should auto-rollback via circuit breaker."
+          echo "Smoke test FAILED — ECS circuit breaker should auto-rollback."
           exit 1
