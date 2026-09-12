@@ -1,5 +1,5 @@
 # .github/workflows/ci.yml
-# CI pipeline: test, build, security scan, terraform validate & plan.
+# CI pipeline: lint, test, build, security scan, terraform validate + plan.
 # Runs on every PR and every push to main. Deploy is a separate workflow.
 
 name: CI
@@ -12,8 +12,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  id-token: write             # OIDC for AWS
+  pull-requests: write         # so tf plan can be posted as a PR comment
+  id-token: write              # OIDC for AWS
 
 jobs:
   # ---------------------------------------------------------------------
@@ -22,26 +22,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      # Ruff — Python linter + formatter check. Extremely fast, covers
-      # pycodestyle, pyflakes, isort, bugbear, and many more. Fails the
-      # step on any lint error; adjust config in pyproject.toml if you
-      # want a subset.
       - name: Ruff (lint)
         run: |
           pip install ruff==0.7.4
           ruff check app/
           ruff format --check app/
 
-      # Bandit — Python security linter. Looks for common vuln patterns:
-      # eval(), assert-in-production, weak crypto, hardcoded secrets, SQL
-      # concat, subprocess=shell=True, etc. Fail-soft (issues reported but
-      # don't gate) so a false positive doesn't block a deploy — we track
-      # findings and fix, we don't stampede.
       - name: Bandit (security)
         continue-on-error: true
         run: |
@@ -55,7 +45,6 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -85,7 +74,6 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v4
-
       - uses: docker/setup-buildx-action@v3
 
       - name: Build image (no push)
@@ -100,11 +88,9 @@ jobs:
           cache-to: type=gha,mode=max
 
       # Gate on CRITICAL only. HIGH-severity findings are reported but don't
-      # block the pipeline — they get tracked and prioritized through the
-      # regular backlog. Blocking on HIGH creates a false urgency that
-      # pushes teams to bypass security scans; blocking on CRITICAL keeps
-      # the pipeline honest for issues that genuinely warrant stopping.
-      # See .trivyignore at repo root for time-boxed suppressions.
+      # block the pipeline - they get tracked and prioritized through the
+      # regular backlog. Blocking on HIGH creates false urgency; blocking
+      # on CRITICAL keeps the pipeline honest.
       - name: Trivy scan (image)
         uses: aquasecurity/trivy-action@0.35.0
         with:
@@ -140,10 +126,8 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.16.2
+          terraform_wrapper: false
 
-      # Informational only — `terraform fmt` catches whitespace differences,
-      # which don't affect correctness. Fix locally with:
-      #   terraform fmt -recursive terraform/
       - name: fmt (informational)
         continue-on-error: true
         run: terraform fmt -check -recursive ../../../terraform
@@ -171,11 +155,74 @@ jobs:
       - name: validate
         run: terraform validate
 
-      - name: plan (only if AWS creds configured)
+      - name: plan
+        id: plan
         if: vars.AWS_ROLE_ARN != ''
         run: |
-          terraform plan -input=false -no-color \
+          set -o pipefail
+          # Run plan and capture output to a file so we can render it in
+          # the workflow summary and post it as a PR comment. exit-code=2
+          # means "changes present" (not a failure); we accept both 0 and 2.
+          terraform plan -input=false -no-color -detailed-exitcode \
             -var="github_org=${{ github.repository_owner }}" \
             -var="github_repo=${{ github.event.repository.name }}" \
             -var="tf_state_bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -var="tf_lock_table=${{ vars.TF_LOCK_TABLE }}"
+            -var="tf_lock_table=${{ vars.TF_LOCK_TABLE }}" \
+            -var='alert_emails=${{ vars.ALERT_EMAILS_JSON }}' \
+            2>&1 | tee plan.txt || TF_EXIT=$?
+
+          TF_EXIT=${TF_EXIT:-0}
+          echo "exit_code=$TF_EXIT" >> "$GITHUB_OUTPUT"
+
+          # exit 1 = real error, exit 0 = no changes, exit 2 = changes present.
+          # Only exit 1 is a failure for this step.
+          if [ "$TF_EXIT" = "1" ]; then
+            echo "::error::terraform plan failed"
+            exit 1
+          fi
+
+      - name: Render plan into Actions summary
+        if: always() && vars.AWS_ROLE_ARN != ''
+        working-directory: terraform/environments/dev
+        run: |
+          {
+            echo "## Terraform plan (dev)"
+            echo ""
+            if [ -f plan.txt ]; then
+              echo '```hcl'
+              tail -c 60000 plan.txt   # last ~60KB to stay under GitHub's 1MB summary limit
+              echo '```'
+            else
+              echo "_No plan captured._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload plan as artifact
+        if: always() && vars.AWS_ROLE_ARN != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: terraform/environments/dev/plan.txt
+          retention-days: 14
+
+      # PR comment with the plan so reviewers see it inline with the diff.
+      - name: Post plan on PR
+        if: github.event_name == 'pull_request' && vars.AWS_ROLE_ARN != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## Terraform plan (dev)\n\n';
+            try {
+              const plan = fs.readFileSync('terraform/environments/dev/plan.txt', 'utf8');
+              const trimmed = plan.length > 60000 ? '...(truncated)...\n' + plan.slice(-60000) : plan;
+              body += '<details><summary>Show plan</summary>\n\n```hcl\n' + trimmed + '\n```\n</details>\n';
+            } catch (e) {
+              body += '_Plan file not found._\n';
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: body
+            });

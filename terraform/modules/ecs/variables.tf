@@ -112,3 +112,9 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "container_command" {
+  type        = list(string)
+  default     = null
+  description = "Optional command override for the container. Used by the bootstrap image; leave null for the real app."
+}

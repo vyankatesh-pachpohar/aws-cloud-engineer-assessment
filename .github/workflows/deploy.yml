@@ -1,15 +1,15 @@
 # .github/workflows/deploy.yml
-# On push to main:
-#   1. Skip everything if AWS_ROLE_ARN isn't set yet (first-time users push
-#      before configuring GitHub Actions variables — that's expected).
-#   2. Build the container image, push to ECR with commit SHA as tag.
-#   3. terraform apply with that image tag.
-#   4. Register a new ECS task definition + roll out.
-#   5. Wait for ECS to stabilize.
+# On push to main OR manual dispatch:
+#   1. Skip cleanly if AWS_ROLE_ARN isn't set yet.
+#   2. Build the container image, push to ECR (tag = commit SHA + latest).
+#   3. terraform apply with the real image tag.
+#   4. Register a new ECS task definition + roll out (the ECS service ignores
+#      task_definition changes in Terraform, so CD manages that separately).
+#   5. Wait for ECS to stabilise.
 #   6. Smoke-test /health on the ALB.
 #
-# Rollback: on failure, ECS's deployment circuit breaker (configured in the
-# module) reverts to the previous task definition automatically.
+# Rollback: ECS deployment circuit breaker (configured in the module) rolls
+# back to the previous task definition automatically on failure.
 
 name: Deploy
 
@@ -31,7 +31,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ------- pre-check: skip everything if GitHub Actions vars aren't set -------
+  # ------- precheck: skip if GH Actions vars aren't set -------
   precheck:
     name: Check deploy prerequisites
     runs-on: ubuntu-latest
@@ -42,10 +42,10 @@ jobs:
         run: |
           if [ -z "${{ vars.AWS_ROLE_ARN }}" ]; then
             echo "AWS_ROLE_ARN repository variable is not set."
-            echo "Skipping deploy — configure it once you've run the AWS bootstrap."
+            echo "Skipping deploy - configure it once you've run the AWS bootstrap."
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
-            echo "AWS_ROLE_ARN is set — proceeding with deploy."
+            echo "AWS_ROLE_ARN is set - proceeding with deploy."
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -86,10 +86,12 @@ jobs:
             -t "$REGISTRY/$REPO:latest" \
             --push .
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Image pushed::$IMAGE"
 
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.16.2
+          terraform_wrapper: false
 
       - name: terraform init
         working-directory: terraform/environments/dev
@@ -101,16 +103,38 @@ jobs:
             -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
             -backend-config="encrypt=true"
 
-      - name: terraform apply
+      - name: terraform plan (deploy)
+        id: tfplan
         working-directory: terraform/environments/dev
         run: |
-          terraform apply -auto-approve -input=false \
+          set -o pipefail
+          terraform plan -input=false -no-color -detailed-exitcode -out=tfplan.bin \
             -var="container_image_tag=$IMAGE_TAG" \
             -var="github_org=${{ github.repository_owner }}" \
             -var="github_repo=${{ github.event.repository.name }}" \
             -var="tf_state_bucket=${{ vars.TF_STATE_BUCKET }}" \
             -var="tf_lock_table=${{ vars.TF_LOCK_TABLE }}" \
-            -var='alert_emails=${{ vars.ALERT_EMAILS_JSON }}'
+            -var='alert_emails=${{ vars.ALERT_EMAILS_JSON }}' \
+            2>&1 | tee plan.txt || TF_EXIT=$?
+          TF_EXIT=${TF_EXIT:-0}
+          if [ "$TF_EXIT" = "1" ]; then exit 1; fi
+
+      - name: Render plan into summary
+        if: always()
+        working-directory: terraform/environments/dev
+        run: |
+          {
+            echo "## Terraform plan"
+            echo '```hcl'
+            [ -f plan.txt ] && tail -c 60000 plan.txt || echo "no plan"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: terraform apply (only saved plan)
+        working-directory: terraform/environments/dev
+        run: |
+          # apply the exact plan we just captured - no drift between plan and apply
+          terraform apply -input=false -auto-approve tfplan.bin
 
       - name: Register new ECS task definition + update service
         working-directory: terraform/environments/dev
@@ -127,8 +151,12 @@ jobs:
           aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" \
             --query 'taskDefinition' > td.json
 
+          # Swap the image, clear the read-only fields that would be rejected
+          # on re-registration, and drop any bootstrap `command` override so
+          # the real app uses its Dockerfile CMD.
           jq --arg IMG "$IMAGE" '
             .containerDefinitions[0].image = $IMG
+            | del(.containerDefinitions[0].command)
             | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,
                   .compatibilities,.registeredAt,.registeredBy)
           ' td.json > td-new.json
@@ -136,6 +164,8 @@ jobs:
           NEW_ARN=$(aws ecs register-task-definition \
             --cli-input-json file://td-new.json \
             --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          echo "::notice title=Task def registered::$NEW_ARN"
 
           aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
             --task-definition "$NEW_ARN" --force-new-deployment >/dev/null
@@ -152,11 +182,12 @@ jobs:
           for i in $(seq 1 20); do
             code=$(curl -s -o /tmp/body -w '%{http_code}' "$URL/health" || echo "000")
             if [ "$code" = "200" ]; then
+              echo "::notice title=Smoke test OK::$URL/health returned 200"
               cat /tmp/body
               exit 0
             fi
             echo "attempt $i: HTTP $code"
             sleep 6
           done
-          echo "Smoke test FAILED — ECS circuit breaker should auto-rollback."
+          echo "::error::Smoke test FAILED - ECS circuit breaker should auto-rollback."
           exit 1

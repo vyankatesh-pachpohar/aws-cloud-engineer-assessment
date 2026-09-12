@@ -93,9 +93,18 @@ module "ecs" {
   target_group_arn_suffix = module.alb.target_group_arn_suffix
 
   # First apply uses a public bootstrap image so ECS has something to pull
-  # before our ECR repo is populated. CI overrides this with our image URI.
-  container_image = var.container_image_tag == "bootstrap" ? "public.ecr.aws/docker/library/nginx:alpine" : "${module.ecr.repository_url}:${var.container_image_tag}"
-  container_port  = var.container_image_tag == "bootstrap" ? 80 : 8000
+  # before our ECR repo is populated. The bootstrap image runs a tiny HTTP
+  # server on port 8000 with a /health endpoint that returns 200, so the
+  # ALB target group is healthy from day one. The CI/CD deploy workflow
+  # then overrides container_image_tag to swap in the real app image.
+  # Container port stays at 8000 for BOTH bootstrap and real app - avoids
+  # any port drift on subsequent applies.
+  container_image = var.container_image_tag == "bootstrap" ? "public.ecr.aws/docker/library/python:3.12-alpine" : "${module.ecr.repository_url}:${var.container_image_tag}"
+  container_port  = 8000
+  container_command = var.container_image_tag == "bootstrap" ? [
+    "sh", "-c",
+    "mkdir -p /www && printf ok > /www/health && cd /www && python3 -m http.server 8000"
+  ] : null
 
   desired_count = 2
   min_capacity  = 2

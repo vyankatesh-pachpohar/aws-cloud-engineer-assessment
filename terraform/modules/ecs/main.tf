@@ -144,6 +144,9 @@ resource "aws_ecs_task_definition" "app" {
     image        = var.container_image
     essential    = true
     portMappings = [{ containerPort = var.container_port, protocol = "tcp" }]
+    # Optional command override - used by the bootstrap image so it exposes
+    # a /health endpoint on the same port the real app will later use.
+    command = var.container_command
 
     environment = [
       for k, v in var.environment : { name = k, value = v }
@@ -213,7 +216,7 @@ resource "aws_ecs_service" "app" {
 
   # CI/CD will update the task-def image and desired_count; don't fight it.
   lifecycle {
-    ignore_changes = [task_definition, desired_count]
+    ignore_changes = [task_definition, desired_count, load_balancer]
   }
 
   depends_on = [aws_iam_role_policy_attachment.execution_managed]
