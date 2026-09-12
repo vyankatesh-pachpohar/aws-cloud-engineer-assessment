@@ -1,4 +1,4 @@
-﻿variable "name" {
+variable "name" {
   type = string
 }
 
@@ -12,7 +12,7 @@ variable "private_subnet_ids" {
 
 variable "engine_version" {
   type    = string
-  default = "16.4"
+  default = "16.15"
 }
 
 variable "instance_class" {

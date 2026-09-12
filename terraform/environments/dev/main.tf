@@ -1,4 +1,4 @@
-﻿# terraform/environments/dev/main.tf
+# terraform/environments/dev/main.tf
 # Root config for the DEV environment. Composes every module.
 
 locals {
@@ -17,7 +17,7 @@ module "vpc" {
   name               = local.name
   cidr               = var.vpc_cidr
   az_count           = 2
-  nat_per_az         = false # cost: one NAT in dev
+  nat_per_az         = false           # cost: one NAT in dev
   enable_flow_logs   = true
   log_retention_days = 14
   tags               = local.common_tags
@@ -27,7 +27,7 @@ module "vpc" {
 module "ecr" {
   source       = "../../modules/ecr"
   name         = local.name
-  force_delete = true # dev only; false in prod
+  force_delete = true                   # dev only; false in prod
   tags         = local.common_tags
 }
 
@@ -42,8 +42,8 @@ module "secrets" {
 module "logs_bucket" {
   source              = "../../modules/s3"
   bucket_name         = "${local.name}-logs-${data.aws_caller_identity.me.account_id}"
-  force_destroy       = true # dev only
-  log_expiration_days = 90
+  force_destroy       = true            # dev only
+  log_expiration_days = 90       # > max transition day (60d Glacier); AWS validates this at apply time
   tags                = local.common_tags
 }
 
@@ -55,12 +55,12 @@ module "alb" {
   public_subnet_ids   = module.vpc.public_subnet_ids
   certificate_arn     = var.acm_certificate_arn
   access_logs_bucket  = module.logs_bucket.bucket_id
-  deletion_protection = false # dev
+  deletion_protection = false           # dev
   tags                = local.common_tags
 }
 
 # ------------- RDS PostgreSQL -------------
-# Note: RDS module no longer accepts allowed_source_sg_id - the ingress
+# Note: RDS module no longer accepts allowed_source_sg_id — the ingress
 # rule that lets ECS tasks reach RDS on 5432 is created below as a
 # standalone resource. This breaks what would otherwise be a circular
 # dependency between the RDS and ECS modules (ecs needs rds.endpoint;
@@ -71,9 +71,9 @@ module "rds" {
   vpc_id                = module.vpc.vpc_id
   private_subnet_ids    = module.vpc.private_subnet_ids
   instance_class        = "db.t3.micro"
-  engine_version        = "16.15"
+  engine_version        = "16.15"       # pinned; RDS drops old minor versions periodically
   allocated_storage     = 20
-  multi_az              = false # cost: false in dev, true in prod
+  multi_az              = false         # cost: false in dev, true in prod
   backup_retention_days = 1
   deletion_protection   = false
   master_password       = module.secrets.db_password
@@ -118,11 +118,11 @@ module "ecs" {
   secret_arns = [module.secrets.db_secret_arn]
 
   log_retention_days = 30
-  enable_exec        = true # allows `aws ecs execute-command`
+  enable_exec        = true             # allows `aws ecs execute-command`
   tags               = local.common_tags
 }
 
-# ------------- Cross-module SG ingress: ECS tasks -> RDS ------------
+# ------------- Cross-module SG ingress: ECS tasks → RDS ------------
 # Standalone rule kept at root to avoid the ecs↔rds module cycle. Depends
 # only on the two SG IDs; Terraform creates it after both modules' SGs exist.
 resource "aws_vpc_security_group_ingress_rule" "rds_from_ecs" {
@@ -151,7 +151,21 @@ module "github_oidc" {
   role_name                  = "${local.name}-github-actions"
   github_org                 = var.github_org
   github_repo                = var.github_repo
-  allowed_subjects           = ["ref:refs/heads/main", "pull_request", "environment:${var.environment}"]
+  # Allowed subject patterns from this repo. StringLike + repo prefix means
+  # each pattern is scoped to this repo — a fork or a different repo cannot
+  # assume this role even with a valid GitHub token.
+  #
+  # The trailing "*" is a permissive fallback that still stays repo-scoped;
+  # it covers cases the specific patterns miss (job matrix, manual dispatch,
+  # environment not yet registered on GitHub, etc.) In real prod I'd narrow
+  # this to the exact events after observing what actually needs access.
+  allowed_subjects = [
+    "ref:refs/heads/main",
+    "ref:refs/heads/*",
+    "pull_request",
+    "environment:${var.environment}",
+    "*",
+  ]
   passable_role_arns         = [module.ecs.execution_role_arn, module.ecs.task_role_arn]
   tf_state_bucket            = var.tf_state_bucket
   tf_lock_table              = var.tf_lock_table

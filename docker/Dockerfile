@@ -2,6 +2,15 @@
 # ----------- Stage 1: build wheels -----------
 # Builder has compilers/headers; none of that ships in the final image.
 FROM python:3.12-slim AS builder
+
+# Apply OS security patches from the Debian security repo. This picks up
+# fixes for base-image packages (perl-base, glibc, openssl, etc) that were
+# outdated when the python:3.12-slim tag was last built. Trivy CI gates on
+# CRITICAL — this keeps it honest.
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends upgrade \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build
 COPY app/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
@@ -9,6 +18,12 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 # ----------- Stage 2: runtime -----------
 FROM python:3.12-slim AS runtime
+
+# Same OS-patch step for the runtime stage: the final shipped image needs
+# to be patched, not just the builder we discard.
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends upgrade \
+ && rm -rf /var/lib/apt/lists/*
 
 # Security: run as an unprivileged user, no shell for that user.
 RUN groupadd -r app && useradd -r -g app -d /srv/app -s /usr/sbin/nologin app
