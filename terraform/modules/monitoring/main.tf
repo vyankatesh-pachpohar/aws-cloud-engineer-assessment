@@ -43,10 +43,10 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
 
 # ---------- 2. Unhealthy hosts ----------
 resource "aws_cloudwatch_metric_alarm" "alb_unhealthy" {
-  alarm_name          = "${var.name}-alb-unhealthy-hosts"
-  alarm_description   = "≥1 unhealthy target for 3 minutes"
-  namespace           = "AWS/ApplicationELB"
-  metric_name         = "UnHealthyHostCount"
+  alarm_name        = "${var.name}-alb-unhealthy-hosts"
+  alarm_description = "≥1 unhealthy target for 3 minutes"
+  namespace         = "AWS/ApplicationELB"
+  metric_name       = "UnHealthyHostCount"
   dimensions = {
     LoadBalancer = var.alb_arn_suffix
     TargetGroup  = var.target_group_arn_suffix
@@ -80,10 +80,10 @@ resource "aws_cloudwatch_metric_alarm" "alb_latency" {
 
 # ---------- 4. ECS CPU high ----------
 resource "aws_cloudwatch_metric_alarm" "ecs_cpu" {
-  alarm_name          = "${var.name}-ecs-cpu-high"
-  alarm_description   = "ECS service average CPU > 85% for 10 min"
-  namespace           = "AWS/ECS"
-  metric_name         = "CPUUtilization"
+  alarm_name        = "${var.name}-ecs-cpu-high"
+  alarm_description = "ECS service average CPU > 85% for 10 min"
+  namespace         = "AWS/ECS"
+  metric_name       = "CPUUtilization"
   dimensions = {
     ClusterName = var.ecs_cluster_name
     ServiceName = var.ecs_service_name

@@ -21,7 +21,7 @@ resource "aws_ecs_cluster" "this" {
   name = "${var.name}-cluster"
   setting {
     name  = "containerInsights"
-    value = "enabled"                        # per-service CPU/mem/net metrics
+    value = "enabled" # per-service CPU/mem/net metrics
   }
   tags = var.tags
 }
@@ -33,7 +33,7 @@ resource "aws_ecs_cluster_capacity_providers" "this" {
   default_capacity_provider_strategy {
     capacity_provider = "FARGATE"
     weight            = 1
-    base              = var.min_on_demand    # ensure baseline on-demand tasks
+    base              = var.min_on_demand # ensure baseline on-demand tasks
   }
 }
 
@@ -55,14 +55,14 @@ resource "aws_security_group" "tasks" {
     from_port       = var.container_port
     to_port         = var.container_port
     protocol        = "tcp"
-    security_groups = [var.alb_sg_id]        # narrower than a CIDR
+    security_groups = [var.alb_sg_id] # narrower than a CIDR
   }
 
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]              # to RDS, ECR, Secrets Manager, ...
+    cidr_blocks = ["0.0.0.0/0"] # to RDS, ECR, Secrets Manager, ...
   }
 
   tags = merge(var.tags, { Name = "${var.name}-tasks-sg" })
@@ -171,8 +171,8 @@ resource "aws_ecs_task_definition" "app" {
       startPeriod = 15
     }
 
-    stopTimeout = 30                # allow graceful shutdown (finish in-flight)
-    readonlyRootFilesystem = false  # uvicorn writes to /tmp; flip on with a tmpfs if hardened
+    stopTimeout            = 30    # allow graceful shutdown (finish in-flight)
+    readonlyRootFilesystem = false # uvicorn writes to /tmp; flip on with a tmpfs if hardened
   }])
 
   tags = var.tags
@@ -186,12 +186,12 @@ resource "aws_ecs_service" "app" {
   desired_count          = var.desired_count
   launch_type            = "FARGATE"
   platform_version       = "LATEST"
-  enable_execute_command = var.enable_exec       # ECS Exec for shell-in-container
+  enable_execute_command = var.enable_exec # ECS Exec for shell-in-container
 
   network_configuration {
     subnets          = var.private_subnet_ids
     security_groups  = [aws_security_group.tasks.id]
-    assign_public_ip = false                     # tasks reach the internet via NAT
+    assign_public_ip = false # tasks reach the internet via NAT
   }
 
   load_balancer {
@@ -207,7 +207,7 @@ resource "aws_ecs_service" "app" {
     rollback = true
   }
   deployment_maximum_percent         = 200
-  deployment_minimum_healthy_percent = 100       # zero-downtime deploys
+  deployment_minimum_healthy_percent = 100 # zero-downtime deploys
 
   health_check_grace_period_seconds = 60
 
@@ -237,10 +237,10 @@ resource "aws_appautoscaling_policy" "cpu" {
   service_namespace  = aws_appautoscaling_target.svc.service_namespace
 
   target_tracking_scaling_policy_configuration {
-    target_value       = 60
+    target_value = 60
     predefined_metric_specification { predefined_metric_type = "ECSServiceAverageCPUUtilization" }
-    scale_in_cooldown  = 300           # slow to shed: avoids flapping
-    scale_out_cooldown = 60            # fast to add: user experience first
+    scale_in_cooldown  = 300 # slow to shed: avoids flapping
+    scale_out_cooldown = 60  # fast to add: user experience first
   }
 }
 

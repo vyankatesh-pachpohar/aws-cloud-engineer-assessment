@@ -37,8 +37,7 @@
 │   └── tests/              pytest, SQLite in-memory (CI needs no Postgres)
 ├── docker/
 │   ├── Dockerfile          multi-stage, non-root, HEALTHCHECK
-│   └── docker-compose.yml  postgres + api for local dev
-├── docker-compose.yml      thin root wrapper
+├── docker-compose.yml      compose stack (postgres + api) for local dev
 ├── terraform/
 │   ├── backend/            bootstrap: S3 state bucket + DDB lock table
 │   ├── environments/dev/   composes all modules

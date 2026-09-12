@@ -4,9 +4,9 @@
 
 # One provider per AWS account. If it already exists, reference it and skip.
 resource "aws_iam_openid_connect_provider" "github" {
-  count           = var.create_provider ? 1 : 0
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
+  count          = var.create_provider ? 1 : 0
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
   # Thumbprint of GitHub's OIDC certificate root. AWS relies on this cert
   # chain; the value below is GitHub's current DigiCert root thumbprint.
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
@@ -100,8 +100,8 @@ data "aws_iam_policy_document" "deployer" {
   }
   # Terraform S3 state + DynamoDB lock (scoped to the state bucket/table)
   statement {
-    sid       = "TFState"
-    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
+    sid     = "TFState"
+    actions = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
     resources = [
       "arn:aws:s3:::${var.tf_state_bucket}",
       "arn:aws:s3:::${var.tf_state_bucket}/*",

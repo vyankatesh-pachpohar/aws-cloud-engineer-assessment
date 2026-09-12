@@ -92,7 +92,7 @@ resource "aws_route_table" "private" {
   count  = var.az_count
   vpc_id = aws_vpc.this.id
   route {
-    cidr_block     = "0.0.0.0/0"
+    cidr_block = "0.0.0.0/0"
     # When nat_per_az=false all AZs share NAT[0]; otherwise each AZ uses its own.
     nat_gateway_id = aws_nat_gateway.this[var.nat_per_az ? count.index : 0].id
   }
@@ -119,9 +119,9 @@ resource "aws_iam_role" "flow" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "vpc-flow-logs.amazonaws.com" }
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
   tags = var.tags
@@ -148,7 +148,7 @@ resource "aws_iam_role_policy" "flow" {
 resource "aws_flow_log" "this" {
   count           = var.enable_flow_logs ? 1 : 0
   vpc_id          = aws_vpc.this.id
-  traffic_type    = "REJECT"        # REJECT is cheap + shows blocked traffic
+  traffic_type    = "REJECT" # REJECT is cheap + shows blocked traffic
   log_destination = aws_cloudwatch_log_group.flow[0].arn
   iam_role_arn    = aws_iam_role.flow[0].arn
 }

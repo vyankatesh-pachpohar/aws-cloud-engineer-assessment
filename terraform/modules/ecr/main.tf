@@ -4,11 +4,11 @@
 
 resource "aws_ecr_repository" "this" {
   name                 = var.name
-  image_tag_mutability = "MUTABLE"    # allow moving :latest during dev
+  image_tag_mutability = "MUTABLE" # allow moving :latest during dev
   force_delete         = var.force_delete
 
   image_scanning_configuration { scan_on_push = true }
-  encryption_configuration     { encryption_type = "AES256" }
+  encryption_configuration { encryption_type = "AES256" }
 
   tags = var.tags
 }
@@ -21,10 +21,10 @@ resource "aws_ecr_lifecycle_policy" "this" {
         rulePriority = 1
         description  = "Keep last 10 tagged images"
         selection = {
-          tagStatus     = "tagged"
+          tagStatus      = "tagged"
           tagPatternList = ["*"]
-          countType     = "imageCountMoreThan"
-          countNumber   = 10
+          countType      = "imageCountMoreThan"
+          countNumber    = 10
         }
         action = { type = "expire" }
       },

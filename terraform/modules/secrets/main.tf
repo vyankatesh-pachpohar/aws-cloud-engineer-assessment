@@ -7,13 +7,13 @@
 resource "random_password" "db" {
   length           = 32
   special          = true
-  override_special = "!#$%*_+-="   # exclude chars that trip up shells / URLs
+  override_special = "!#$%*_+-=" # exclude chars that trip up shells / URLs
 }
 
 resource "aws_secretsmanager_secret" "db" {
   name                    = "${var.name}/db-password"
   description             = "Master password for RDS ${var.name}"
-  recovery_window_in_days = 7      # soft-delete window; 0 in dev if you must
+  recovery_window_in_days = 7 # soft-delete window; 0 in dev if you must
   tags                    = var.tags
 }
 

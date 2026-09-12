@@ -48,13 +48,13 @@ variable "lock_table" {
 # ---------- state bucket ----------
 resource "aws_s3_bucket" "state" {
   bucket        = var.state_bucket
-  force_destroy = false      # never let TF nuke state
+  force_destroy = false # never let TF nuke state
 }
 
 resource "aws_s3_bucket_versioning" "state" {
   bucket = aws_s3_bucket.state.id
   versioning_configuration {
-    status = "Enabled"       # every apply is a new version -> recoverable
+    status = "Enabled" # every apply is a new version -> recoverable
   }
 }
 
@@ -78,7 +78,7 @@ resource "aws_s3_bucket_public_access_block" "state" {
 # ---------- lock table ----------
 resource "aws_dynamodb_table" "lock" {
   name         = var.lock_table
-  billing_mode = "PAY_PER_REQUEST"     # cheap: only pay per lock op
+  billing_mode = "PAY_PER_REQUEST" # cheap: only pay per lock op
   hash_key     = "LockID"
 
   attribute {

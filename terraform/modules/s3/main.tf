@@ -3,7 +3,7 @@
 # The bucket policy allows the regional ELB service account to write logs.
 
 data "aws_elb_service_account" "main" {}
-data "aws_caller_identity"      "me"   {}
+data "aws_caller_identity" "me" {}
 
 resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
@@ -56,11 +56,11 @@ resource "aws_s3_bucket_policy" "alb_logs" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid    = "ALBAccessLogs"
-      Effect = "Allow"
+      Sid       = "ALBAccessLogs"
+      Effect    = "Allow"
       Principal = { AWS = data.aws_elb_service_account.main.arn }
-      Action   = "s3:PutObject"
-      Resource = "${aws_s3_bucket.this.arn}/alb/AWSLogs/${data.aws_caller_identity.me.account_id}/*"
+      Action    = "s3:PutObject"
+      Resource  = "${aws_s3_bucket.this.arn}/alb/AWSLogs/${data.aws_caller_identity.me.account_id}/*"
     }]
   })
 }
