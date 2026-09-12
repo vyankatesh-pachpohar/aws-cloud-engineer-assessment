@@ -31,10 +31,11 @@
   <circle cx="80" cy="140" r="22" class="aws-teal"/>
   <text x="80" y="145" class="box-label">Users</text>
 
-  <!-- Route53 -->
-  <rect x="145" y="115" width="110" height="50" rx="6" class="aws-purple"/>
-  <text x="200" y="138" class="box-label">Route 53</text>
-  <text x="200" y="153" class="sub-label">DNS (optional)</text>
+  <!-- Route53 (optional - not deployed in this dev environment; ALB DNS name is used) -->
+  <rect x="145" y="115" width="110" height="50" rx="6" fill="#eceff1" stroke="#7c3aed" stroke-dasharray="4 3" stroke-width="1.5"/>
+  <text x="200" y="135" text-anchor="middle" font-size="11" font-weight="bold" fill="#7c3aed">Route 53</text>
+  <text x="200" y="149" text-anchor="middle" font-size="9" fill="#78909c">optional - needs domain</text>
+  <text x="200" y="160" text-anchor="middle" font-size="9" fill="#78909c">(not deployed today)</text>
 
   <!-- WAF -->
   <rect x="285" y="115" width="110" height="50" rx="6" class="aws-red"/>

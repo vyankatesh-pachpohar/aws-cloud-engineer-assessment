@@ -1,4 +1,4 @@
-terraform {
+﻿terraform {
   backend "s3" {
     # These values are supplied via `terraform init -backend-config=` OR
     # by hard-coding after you've bootstrapped (see terraform/backend/).

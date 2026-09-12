@@ -1,4 +1,4 @@
-# terraform/modules/vpc/main.tf
+﻿# terraform/modules/vpc/main.tf
 # Multi-AZ VPC with public and private subnets.
 #
 # Design decisions:

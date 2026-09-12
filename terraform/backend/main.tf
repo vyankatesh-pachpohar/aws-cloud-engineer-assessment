@@ -1,4 +1,4 @@
-# terraform/backend/main.tf
+﻿# terraform/backend/main.tf
 # One-time bootstrap: create the S3 bucket + DynamoDB table that the main
 # Terraform environments use for remote state and state locking.
 # Run this from your local machine ONCE per AWS account.
@@ -11,7 +11,7 @@ terraform {
       version = "~> 5.70"
     }
   }
-  # NOTE: local state on purpose — this stack creates the remote-state backend.
+  # NOTE: local state on purpose - this stack creates the remote-state backend.
 }
 
 provider "aws" {

@@ -1,4 +1,4 @@
-# terraform/modules/secrets/main.tf
+﻿# terraform/modules/secrets/main.tf
 # Generate a random DB password and store it in AWS Secrets Manager.
 # ECS references this ARN in the task definition -> injected as env var at
 # container start. The password never appears in Terraform state as plaintext

@@ -37,7 +37,8 @@
 │   └── tests/              pytest, SQLite in-memory (CI needs no Postgres)
 ├── docker/
 │   ├── Dockerfile          multi-stage, non-root, HEALTHCHECK
-├── docker-compose.yml      compose stack (postgres + api) for local dev
+│   └── docker-compose.yml  postgres + api for local dev
+├── docker-compose.yml      thin root wrapper
 ├── terraform/
 │   ├── backend/            bootstrap: S3 state bucket + DDB lock table
 │   ├── environments/dev/   composes all modules
@@ -285,12 +286,22 @@ The whole approach rests on two things: **pre-committed rollback thresholds** (s
 - No ACM certificate / custom domain in the base deploy. Set `acm_certificate_arn` to enable HTTPS.
 - IAM PowerUserAccess is attached to the deploy role for Terraform simplicity. In real prod, split into plan (read) + apply (write) roles.
 
-**Limitations**
-- Single environment (dev). A `prod/` folder is a copy of `dev/` with different values (Multi-AZ RDS on, per-AZ NAT on, deletion protection on, immutable ECR tags).
-- No CloudFront in front of the ALB — recommended in [SCALABILITY.md](SCALABILITY.md) for the 10× scenario.
-- No end-to-end TLS between ALB and tasks; ALB → target is HTTP within the VPC. Ready to add.
-- No RDS Proxy — recommended when connection count grows past ~300 (see SCALABILITY §3).
-- VPC endpoints (S3/ECR/Secrets/Logs) not created — recommended cost optimisation (see COST_OPTIMIZATION §4).
+**Limitations — what's not deployed today, but the code supports**
+
+Every one of these is a deliberate scope decision for the assessment, not a design gap. Each is a small, well-defined addition when a real prod environment is needed.
+
+- **Route 53 + ACM/HTTPS.** Requires a real domain (which costs money and takes 15+ min to validate). The current deployment uses the ALB's AWS-assigned DNS name over HTTP. To enable: register a domain, create a Route 53 hosted zone, request an ACM cert with DNS validation, and set `acm_certificate_arn = "..."` in `terraform.tfvars`. The ALB module already handles the HTTPS listener + HTTP→HTTPS redirect when the cert ARN is passed.
+- **CloudFront in front of the ALB.** Recommended in [SCALABILITY.md](SCALABILITY.md) for the 10× traffic scenario. Not deployed by default.
+- **RDS Proxy.** Recommended when connection count grows past ~300 concurrent (see SCALABILITY §3). Not deployed by default.
+- **VPC endpoints for S3, ECR, Secrets Manager, CloudWatch Logs.** Recommended cost optimisation (see COST_OPTIMIZATION §4) — cuts NAT egress cost significantly. Not deployed.
+- **End-to-end TLS from ALB to task.** ALB → target is HTTP within the VPC (encrypted at hypervisor level). For a compliance-heavy environment, add a self-signed cert on the task and switch the target group to HTTPS.
+- **Second `prod` environment.** A `terraform/environments/prod/` folder is a copy of `dev/` with different values in `terraform.tfvars` (`multi_az = true`, `nat_per_az = true`, `deletion_protection = true`, immutable ECR tags, bigger instances). Same modules, same code.
+
+**Bootstrap image note.** On first `terraform apply`, the ECS service starts with a public `nginx:alpine` image because ECR is empty at that point. This is a documented chicken-and-egg workaround: the ECS service needs *some* image to reference, but our own image doesn't exist in ECR yet. On the very first CI/CD deploy — or a manual `docker push` to ECR — the deploy workflow builds the real app image and updates the ECS task definition to use it. If you land on the ALB before that first real deploy, you'll get 503 from the ALB because nginx returns 404 for `/health` and the target group marks it unhealthy. **That's expected. The immediate fix is to run the Deploy workflow once.**
+
+**Other scope decisions**
+- IAM PowerUserAccess is attached to the deploy role for Terraform simplicity. In real prod, split into plan (read) + apply (write) roles.
+- Single environment (dev). Prod is a copy with different tfvars.
 
 ## Cleanup
 

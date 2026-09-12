@@ -3,6 +3,8 @@
 **From:** Users → API Gateway → Lambda → DynamoDB/RDS
 **To:**   Users → Route 53 → WAF → ALB → ECS Fargate → RDS PostgreSQL
 
+> **On Route 53 in this document.** The migration strategy below relies on Route 53 weighted DNS records to shift traffic gradually between the old and new stacks — that is the correct migration approach and requires a domain owned in Route 53. **The current deployment in this repo does NOT include Route 53** because a real domain is needed. Everything else in the target stack — WAF, ALB, ECS Fargate, RDS — is fully provisioned by the Terraform in `terraform/environments/dev/`. For an actual migration, adding the Route 53 hosted zone + weighted records is a small additional module: two `aws_route53_record` resources with `weighted_routing_policy`, and lowering the record TTL to 60 seconds well before the first shift.
+
 The migration is done as a **gradual, weighted DNS + parallel-stack cut-over**, not a big-bang. At every step both stacks are live; we shift a percentage of real traffic and watch the SLOs. If anything looks wrong we shift back — DNS is our steering wheel.
 
 ## Guiding principles

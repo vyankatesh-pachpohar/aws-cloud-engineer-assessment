@@ -1,4 +1,4 @@
-# terraform/environments/dev/main.tf
+﻿# terraform/environments/dev/main.tf
 # Root config for the DEV environment. Composes every module.
 
 locals {
@@ -43,7 +43,7 @@ module "logs_bucket" {
   source              = "../../modules/s3"
   bucket_name         = "${local.name}-logs-${data.aws_caller_identity.me.account_id}"
   force_destroy       = true # dev only
-  log_expiration_days = 30
+  log_expiration_days = 90
   tags                = local.common_tags
 }
 
@@ -60,7 +60,7 @@ module "alb" {
 }
 
 # ------------- RDS PostgreSQL -------------
-# Note: RDS module no longer accepts allowed_source_sg_id — the ingress
+# Note: RDS module no longer accepts allowed_source_sg_id - the ingress
 # rule that lets ECS tasks reach RDS on 5432 is created below as a
 # standalone resource. This breaks what would otherwise be a circular
 # dependency between the RDS and ECS modules (ecs needs rds.endpoint;
@@ -71,6 +71,7 @@ module "rds" {
   vpc_id                = module.vpc.vpc_id
   private_subnet_ids    = module.vpc.private_subnet_ids
   instance_class        = "db.t3.micro"
+  engine_version        = "16.15"
   allocated_storage     = 20
   multi_az              = false # cost: false in dev, true in prod
   backup_retention_days = 1
@@ -121,7 +122,7 @@ module "ecs" {
   tags               = local.common_tags
 }
 
-# ------------- Cross-module SG ingress: ECS tasks → RDS ------------
+# ------------- Cross-module SG ingress: ECS tasks -> RDS ------------
 # Standalone rule kept at root to avoid the ecs↔rds module cycle. Depends
 # only on the two SG IDs; Terraform creates it after both modules' SGs exist.
 resource "aws_vpc_security_group_ingress_rule" "rds_from_ecs" {

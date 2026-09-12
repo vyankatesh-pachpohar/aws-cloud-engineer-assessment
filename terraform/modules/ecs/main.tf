@@ -1,16 +1,16 @@
-# terraform/modules/ecs/main.tf
+﻿# terraform/modules/ecs/main.tf
 # ECS Fargate cluster + service.
 #
 # Design decisions:
-#  * Fargate (not EC2) — no OS patching, per-second billing, matches assessed
+#  * Fargate (not EC2) - no OS patching, per-second billing, matches assessed
 #    "server-based/containerized" requirement without adding EC2 management.
 #  * Two IAM roles:
-#      execution_role  — ECS agent uses it to pull ECR images and read secrets
+#      execution_role  - ECS agent uses it to pull ECR images and read secrets
 #                        BEFORE the container starts (log driver, secrets mgr).
-#      task_role       — the running container assumes it (AWS API calls from
+#      task_role       - the running container assumes it (AWS API calls from
 #                        inside the app). Empty here because the app only talks
 #                        to RDS; extend as needed (S3, SQS, ...).
-#  * Secrets Manager -> env var (secrets = [...]) — the DB password is never
+#  * Secrets Manager -> env var (secrets = [...]) - the DB password is never
 #    baked into the image nor stored in plaintext env vars.
 #  * Log driver awslogs -> CloudWatch (JSON lines from the app, queryable).
 #  * Auto scaling on CPU 60% target and per-target request count.
@@ -47,7 +47,7 @@ resource "aws_cloudwatch_log_group" "app" {
 # ---------- security group for tasks ----------
 resource "aws_security_group" "tasks" {
   name        = "${var.name}-tasks"
-  description = "ECS tasks — only accept traffic from the ALB"
+  description = "ECS tasks - only accept traffic from the ALB"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -122,7 +122,7 @@ resource "aws_iam_role" "task" {
   tags               = var.tags
 }
 
-# Optional extra policies (e.g. S3 write) — attach as needed via var.task_role_policy_arns
+# Optional extra policies (e.g. S3 write) - attach as needed via var.task_role_policy_arns
 resource "aws_iam_role_policy_attachment" "task_extra" {
   for_each   = toset(var.task_role_policy_arns)
   role       = aws_iam_role.task.name

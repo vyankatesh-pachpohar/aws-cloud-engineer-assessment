@@ -2,21 +2,23 @@
 
 ## 1. Target architecture (this repo)
 
+> **What's deployed today:** Users hit the ALB's AWS-assigned DNS name directly (`order-api-dev-alb-<id>.ap-south-1.elb.amazonaws.com`), no Route 53, no custom domain, HTTP not HTTPS. Route 53 + ACM certificate are optional additions that plug in when a real domain is available (see §2.9 "What stays optional"). The core compute, data, security, and delivery pattern is complete without them.
+
 ```
-                   Route 53 (optional)
-                          │
-                        HTTPS 443
-                          ▼
-              ┌────────── WAFv2 ──────────┐
-              │  managed rules + rate lim │
-              └────────────┬──────────────┘
-                           │
-                  ┌────────▼─────────┐
-                  │  Application     │  public subnets, 2 AZs
-                  │  Load Balancer   │  target group -> IPs (awsvpc)
-                  └────────┬─────────┘
-                     access logs
-                           │  HTTP 8000 (TG health = /health)
+              Users
+                |  HTTP (dev)  /  HTTPS 443 (with ACM cert)
+                v
+        [Route 53]  <-- optional, needs a domain; not deployed today
+                |
+                v
+              WAFv2
+       (managed rules + rate limit)
+                |
+                v
+      Application Load Balancer   <-- public subnets, 2 AZs
+       target group -> IPs (awsvpc)
+                |  access logs -> S3
+                |  HTTP 8000 (TG health = /health)
               ┌────────────┴────────────┐
               │                         │
       ┌───────▼──────┐          ┌───────▼──────┐   ECS Fargate tasks
@@ -61,7 +63,7 @@ Static SVG version: [architecture-diagram.svg](architecture-diagram.svg)
 - **Deployment safety:** ECS deployment circuit breaker with `rollback = true` — a bad rollout automatically reverts to the last-good task definition.
 
 ### 2.3 Traffic distribution
-- Route 53 alias → ALB → cross-zone load balancing (default on) → target group (IP targets, Fargate ENIs) → healthy tasks only. Health = TG probe on `/health` (200 vs 503, not just port-open).
+- **When Route 53 is enabled** (has a domain): Route 53 alias -> ALB -> cross-zone load balancing (default on) -> target group (IP targets, Fargate ENIs) -> healthy tasks only. Health = TG probe on `/health` (200 vs 503, not just port-open). **In this deployment** users hit the ALB's AWS-assigned DNS name directly; wiring a custom domain is a variable flip (`acm_certificate_arn`) plus a small Route 53 module.
 
 ### 2.4 Scaling
 Two target-tracking policies on the ECS service:

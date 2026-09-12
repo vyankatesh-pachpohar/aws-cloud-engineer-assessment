@@ -1,4 +1,4 @@
-# terraform/modules/iam-github-oidc/main.tf
+﻿# terraform/modules/iam-github-oidc/main.tf
 # GitHub Actions -> AWS via OIDC. NO long-lived access keys anywhere.
 # GitHub mints a short-lived JWT; AWS STS exchanges it for temporary creds.
 
@@ -49,7 +49,7 @@ resource "aws_iam_role" "deployer" {
   tags               = var.tags
 }
 
-# Least-privilege inline policy — narrow to exactly what deploys need.
+# Least-privilege inline policy - narrow to exactly what deploys need.
 data "aws_iam_policy_document" "deployer" {
   # ECR: push images
   statement {

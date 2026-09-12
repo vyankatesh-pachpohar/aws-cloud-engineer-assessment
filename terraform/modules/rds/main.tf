@@ -1,4 +1,4 @@
-# terraform/modules/rds/main.tf
+﻿# terraform/modules/rds/main.tf
 # RDS PostgreSQL.
 #
 # Design decisions:
@@ -22,7 +22,7 @@ resource "aws_db_subnet_group" "this" {
 
 resource "aws_security_group" "rds" {
   name        = "${var.name}-rds"
-  description = "RDS Postgres — ingress rules added externally"
+  description = "RDS Postgres - ingress rules added externally"
   vpc_id      = var.vpc_id
 
   # Egress-only. Ingress is a separate aws_vpc_security_group_ingress_rule

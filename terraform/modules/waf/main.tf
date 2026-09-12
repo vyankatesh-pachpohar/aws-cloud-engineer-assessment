@@ -1,9 +1,9 @@
-# terraform/modules/waf/main.tf
+﻿# terraform/modules/waf/main.tf
 # Regional WAFv2 attached to the ALB. Uses AWS-managed rule groups:
-#  * CommonRuleSet     — OWASP Top 10 basics
-#  * KnownBadInputs    — obvious exploits (path traversal, etc.)
-#  * SQLiRuleSet       — SQL injection
-#  * Rate-limit        — 2000 req / 5 min per IP (tune per environment)
+#  * CommonRuleSet     - OWASP Top 10 basics
+#  * KnownBadInputs    - obvious exploits (path traversal, etc.)
+#  * SQLiRuleSet       - SQL injection
+#  * Rate-limit        - 2000 req / 5 min per IP (tune per environment)
 
 resource "aws_wafv2_web_acl" "this" {
   name        = "${var.name}-waf"

@@ -1,4 +1,4 @@
-# terraform/modules/ecr/main.tf
+﻿# terraform/modules/ecr/main.tf
 # Private ECR repo. Scan-on-push catches CVEs at build time; the lifecycle
 # policy keeps costs down by evicting old untagged images.
 

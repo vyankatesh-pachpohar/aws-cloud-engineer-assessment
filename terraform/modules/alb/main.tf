@@ -1,4 +1,4 @@
-# terraform/modules/alb/main.tf
+﻿# terraform/modules/alb/main.tf
 # Application Load Balancer with:
 #  * HTTP -> HTTPS redirect when a cert is supplied
 #  * HTTP direct forward when no cert (dev without a domain)

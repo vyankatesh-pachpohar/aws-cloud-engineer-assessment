@@ -1,4 +1,4 @@
-variable "project" {
+﻿variable "project" {
   type    = string
   default = "order-api"
 }

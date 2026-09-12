@@ -1,15 +1,15 @@
-# terraform/modules/monitoring/main.tf
+﻿# terraform/modules/monitoring/main.tf
 # CloudWatch alarms wired to an SNS topic. Add an email subscription to the
 # topic (confirmed via email) and any of these will page you.
 #
 # The five (+extra) alerts required by the assessment brief:
-#   1. ALB 5xx rate                — user-visible failures
-#   2. ALB unhealthy-host count    — capacity below quorum
-#   3. ALB p95 latency             — SLO breach
-#   4. ECS CPU high sustained      — under-provisioned / runaway task
-#   5. RDS connections near limit  — pool leaks / traffic spike
-#   6. RDS free storage low        — silent outage risk
-#   7. RDS CPU high                — query problem / needs upsize
+#   1. ALB 5xx rate                - user-visible failures
+#   2. ALB unhealthy-host count    - capacity below quorum
+#   3. ALB p95 latency             - SLO breach
+#   4. ECS CPU high sustained      - under-provisioned / runaway task
+#   5. RDS connections near limit  - pool leaks / traffic spike
+#   6. RDS free storage low        - silent outage risk
+#   7. RDS CPU high                - query problem / needs upsize
 
 resource "aws_sns_topic" "alerts" {
   name = "${var.name}-alerts"
@@ -44,7 +44,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
 # ---------- 2. Unhealthy hosts ----------
 resource "aws_cloudwatch_metric_alarm" "alb_unhealthy" {
   alarm_name        = "${var.name}-alb-unhealthy-hosts"
-  alarm_description = "≥1 unhealthy target for 3 minutes"
+  alarm_description = ">=1 unhealthy target for 3 minutes"
   namespace         = "AWS/ApplicationELB"
   metric_name       = "UnHealthyHostCount"
   dimensions = {
