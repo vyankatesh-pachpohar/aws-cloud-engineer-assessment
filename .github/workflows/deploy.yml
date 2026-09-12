@@ -157,7 +157,7 @@ jobs:
           jq --arg IMG "$IMAGE" '
             .containerDefinitions[0].image = $IMG
             | del(.containerDefinitions[0].command)
-            | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,
+            | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.deregisteredAt,
                   .compatibilities,.registeredAt,.registeredBy)
           ' td.json > td-new.json
 
